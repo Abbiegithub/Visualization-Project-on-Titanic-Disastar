@@ -1,0 +1,151 @@
+#read raw file (make sure to set the correct working directory to read the csv file)
+options(stringsAsFactors = FALSE)
+tit1<-read.table(file="titanic3.csv",header=TRUE,sep=",")
+tit1
+View(tit1)
+
+#Remove unwanted columns
+
+tit2<-dplyr::select(tit1, -boat,-sibsp,-ticket,-cabin,-embarked,-parch,-body)
+tit2
+options(width=300)
+head(tit2)
+
+#Remove all of the rows for which the variable "home.dest"is empty.
+
+tit3<-tit2[!(tit2$home.dest==""), ]
+tit3
+View(tit3)
+
+#Remove all with an NA
+
+t1<-tit3[!(is.na(tit3$pclass)),]
+t2<-t1[!(is.na(t1$survived)),]
+t3<-t2[!(is.na(t2$name)),]
+t4<-t3[!(is.na(t3$sex)),]
+t5<-t4[!(is.na(t4$age)),]
+t6<-t5[!(is.na(t5$fare)),]
+t7<-t6[!(is.na(t6$home.dest)),]
+t7
+head(t7)
+View(t7)
+
+#Transform Survived
+
+convertSurvived<-function(s)
+{
+  vYes<-rep("Yes",length(s))
+  vNo<-rep("No",length(s))
+  
+  return(ifelse(s==1,vYes,vNo))
+}
+tit4<-mutate(t7,Survived=convertSurvived(survived))
+tit4
+options(width=100)
+head(tit4)
+
+#Transform Sex
+
+convertSex<-function(s)
+{
+  vM<-rep("Male",length(s))
+  vF<-rep("Female",length(s))
+  
+  return(ifelse(s=="male",vM,vF))
+}
+tit5<-mutate(tit4,Sex=convertSex(sex))
+tit5
+head(tit5)
+
+#Transform Age
+
+convertAge<-function(s)
+{
+  vC<-rep("Child",length(s))
+  vA<-rep("Adult",length(s))
+  
+  return(ifelse(s>=0 & s<=12,vC,vA))
+}
+tit6<-mutate(tit5,Age=convertAge(age))
+tit6
+options(width=100)
+head(tit6)
+
+#Transform Pclass
+
+convertClass<-function(s)
+{
+  v1<-rep("1st",length(s))
+  v2<-rep("2nd",length(s))
+  v3<-rep("3rd",length(s))
+  return(ifelse(s==1,v1,ifelse(s==2,v2,v3)))
+}
+tit7<-mutate(tit6,Class=convertClass(pclass))
+tit7
+options(width=100)
+head(tit7)
+
+#filter the missing names from tit7 against the passenger state data
+
+ps<-read.table(file="PassState.csv",header=TRUE,sep=",")
+ps
+
+ntit7<-rename(tit7,Name=name)
+ntit7
+tit8<-inner_join(ps,ntit7,by=c("Name"))  
+tit8
+head(tit8)
+
+#Transform fare
+
+tit9<- mutate(tit8,Fareusd=fare*(87.36))
+tit9
+options(width=100)
+head(tit9)
+
+# Clean data from the resulting data frame till above into csv file
+write.csv(tit9, file = "clean data set.csv",row.names=FALSE)
+
+#grouped by state and age
+
+Tgrp1<- tit9 %>% group_by(State,Age) %>% summarise(Total=n(),tSurvived=length(Survived[Survived=="Yes"])) %>% mutate(pSurvived=round(tSurvived/Total*100,2),pDied=round(100-pSurvived,2)) 
+Tgrp1
+write.csv(Tgrp1, file = "GrpByState$Age.csv",row.names=FALSE)
+
+#Group by state and class
+
+Tgrp2<- tit9 %>% group_by(State,Class) %>% summarise(Total=n(),tSurvived=length(Survived[Survived=="Yes"])) %>% mutate(pSurvived=round(tSurvived/Total*100,2),pDied=round(100-pSurvived,2)) 
+Tgrp2
+write.csv(Tgrp2, file = "GrpByState$Class.csv",row.names=FALSE)
+
+# state and sex
+Tgrp3<- tit9 %>% group_by(State,Sex) %>% summarise(Total=n(),tSurvived=length(Survived[Survived=="Yes"])) %>% mutate(pSurvived=round(tSurvived/Total*100,2),pDied=round(100-pSurvived,2)) 
+Tgrp3
+write.csv(Tgrp3, file = "GrpByState$Sex.csv",row.names=FALSE)
+
+#Group by State, Age, and Sex
+Tgrp4<- tit9 %>% group_by(State,Age,Sex) %>% summarise(Total=n(),tSurvived=length(Survived[Survived=="Yes"])) %>% mutate(pSurvived=round(tSurvived/Total*100,2),pDied=round(100-pSurvived,2)) 
+Tgrp4
+write.csv(Tgrp4, file = "GrpByStateAge$Sex.csv",row.names=FALSE)
+
+#Group by State, Class and Sex
+Tgrp5<- tit9 %>% group_by(State,Class,Sex) %>% summarise(Total=n(),tSurvived=length(Survived[Survived=="Yes"])) %>% mutate(pSurvived=round(tSurvived/Total*100,2),pDied=round(100-pSurvived,2)) 
+Tgrp5
+write.csv(Tgrp5, file = "GrpByStateClass$Sex.csv",row.names=FALSE)
+
+#Analysis of Class & Money by State
+Tgrp6<- tit9 %>% group_by(State) %>% summarise(firstClass=length(Class[Class=="1st"]),secondClass=length(Class[Class=="2nd"]),thirdClass=length(Class[Class=="3rd"]),survivors=length(Survived[Survived=="Yes"]),died=length(Survived[Survived=="No"]),aveFare=mean(Fareusd)) 
+Tgrp6
+write.csv(Tgrp6, file = "GrpClass&MoneybyState.csv",row.names=FALSE)
+
+#Group by State
+Tgrp7<- tit9 %>% group_by(State) %>% summarise(Size=n(),NoOfsurvivors=length(Survived[Survived=="Yes"]),TotFare=sum(Fareusd),minFare=min(Fareusd),MeanFare=mean(Fareusd),maxFare=max(Fareusd)) 
+Tgrp7
+write.csv(Tgrp7, file = "GrpByState.csv",row.names=FALSE)
+
+#crosstab table
+Titanic
+View(Titanic)
+dfTit<-as.data.frame(Titanic)
+dfTit
+write.csv(dfTit, file = "TitanicDataFrame.csv",row.names=FALSE)
